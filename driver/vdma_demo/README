@@ -1,0 +1,3 @@
+just use the arm-xilinx-linux-gnueabi-gcc compile the demo;
+**NOTE**
+on zedboard , 8M/512M memory is reserved for the VMDA frame buffer
