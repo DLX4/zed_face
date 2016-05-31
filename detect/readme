@@ -1,0 +1,7 @@
+##how to compile the face_detection module 
+arm-xilinx-linux-gnueabi-g++ -Wall -fPIC -shared -I/home/dlx/opencv/OpenCV-2.3.1/install/include -L/home/dlx/opencv/OpenCV-2.3.1/install/lib -lopencv_calib3d -lopencv_core -lopencv_features2d -lopencv_flann -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_objdetect -lopencv_video -o libface_detection.so  face_detection.cpp 
+**NOTE**
+change the opencv install path : -I/home/dlx/opencv/OpenCV-2.3.1/install
+make sure the opencv lib have all the so files.
+
+
