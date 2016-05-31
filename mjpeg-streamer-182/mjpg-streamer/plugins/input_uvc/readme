@@ -1,0 +1,7 @@
+arm-xilinx-linux-gnueabi-g++ -Wall -fPIC -shared -I/home/dlx/opencv/OpenCV-2.3.1/install/include -L/home/dlx/opencv/OpenCV-2.3.1/install/lib -lopencv_calib3d -lopencv_core -lopencv_features2d -lopencv_flann -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_objdetect -lopencv_video -o libface_detection.so  face_detection.cpp 
+
+
+dlx modify the input_uvc.c
+every time run it need:
+cp lib
+xml input_uvc.so mjpeg-streamer libface_detection.so
