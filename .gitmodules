@@ -4,3 +4,6 @@
 [submodule "u-boot-digilent/u-boot-digilent"]
 	path = u-boot-digilent/u-boot-digilent
 	url = git@github.com:Digilent/u-boot-digilent.git
+[submodule "toolchain/CodeSourcery"]
+	path = toolchain/CodeSourcery
+	url = git@github.com:xupsh/CodeSourcery.git
