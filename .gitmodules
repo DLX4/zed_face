@@ -1,0 +1,3 @@
+[submodule "linux-digilent/linux-digilent"]
+	path = linux-digilent/linux-digilent
+	url = git@github.com:Digilent/linux-digilent.git
