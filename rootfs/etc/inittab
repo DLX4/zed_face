@@ -1,0 +1,9 @@
+::sysinit:/etc/init.d/rcS
+# /bin/ash
+#
+# Start an askfirst shell on the serial ports
+ttyPS0::respawn:-/bin/ash
+# What to do when restarting the init process
+::restart:/sbin/init
+# What to do before rebooting
+::shutdown:/bin/umount -a -r
