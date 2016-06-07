@@ -70,7 +70,12 @@ const char* cascade_name =
 //static int init_flag = 0;
 int sockfd, portno, n;
 struct sockaddr_in serv_addr;
-char buffer[1024] = "hello dlx----------\n";
+char bufferImage[1024] = "hello dlx----------\n";
+char buffer[32];
+	 
+char *serverWelcome = "welcome";
+char *serverBye = "bye";
+
 int face_main()
 {
 	CvCapture* capture = 0;
@@ -96,20 +101,14 @@ int face_main()
 
     //portno = atoi(argv[2]);
     portno = 9001;
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        printf("ERROR opening socket\n");
+
 
     //bzero((char *) &serv_addr, sizeof(serv_addr));
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr("192.168.1.40");
     serv_addr.sin_port = htons(portno);
-    if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
-        perror("ERROR connecting1\n");
-    memset(buffer, 0, 1024);
-    //init_flag = 1;
-  //}
+
 
 
 	cascade_name = "./haarcascade_frontalface_alt2.xml";
@@ -307,25 +306,25 @@ int face_main()
 void detect_and_draw( IplImage* img ,IplImage* img_old,int minX,int minY)
 {
 	static CvScalar colors = CV_RGB( 255, 0, 0);
-  printf("detect=++++++++++++++++++++++++++++++==\n");
+	printf("detect=++++++++++++++++++++++++++++++==\n");
 	double scale = 1.3;
 	IplImage* gray = cvCreateImage( cvSize(img->width,img->height), 8, 1 );
 	IplImage* small_img = cvCreateImage( cvSize( cvRound (img->width/scale),cvRound (img->height/scale)),8, 1 );
 
 
 	cvCvtColor( img, gray, CV_BGR2GRAY );
-//dlx-----
-//cvSaveImage("/save_gray.bmp",gray);
-  double t = (double)cvGetTickCount();
-  	cvResize( gray, small_img, CV_INTER_LINEAR );
-  t = (double)cvGetTickCount() - t;
-  printf( "cvResize time = %gms\n", t/((double)cvGetTickFrequency()*1000.) );
-  t = (double)cvGetTickCount();
-  	cvEqualizeHist( small_img, small_img );
+	//dlx-----
+	//cvSaveImage("/save_gray.bmp",gray);
+	double t = (double)cvGetTickCount();
+	cvResize( gray, small_img, CV_INTER_LINEAR );
+	t = (double)cvGetTickCount() - t;
+	printf( "cvResize time = %gms\n", t/((double)cvGetTickFrequency()*1000.) );
+	t = (double)cvGetTickCount();
+	cvEqualizeHist( small_img, small_img );
 
-  t = (double)cvGetTickCount() - t;
-  printf( "cvEqualizeHist time = %gms\n", t/((double)cvGetTickFrequency()*1000.) );
-  printf("detect=++++++++++++++++++++++++++++++==0.1\n");
+	t = (double)cvGetTickCount() - t;
+	printf( "cvEqualizeHist time = %gms\n", t/((double)cvGetTickFrequency()*1000.) );
+	printf("detect=++++++++++++++++++++++++++++++==0.1\n");
 	cvClearMemStorage( storage );
 	if( cascade )
 	{
@@ -346,39 +345,65 @@ void detect_and_draw( IplImage* img ,IplImage* img_old,int minX,int minY)
 			cvCircle( img_old, center, radius, colors, 3, 8, 0 );
 			printf("heloo------------------------------------people\n");
 
+
 			// send the image to server
 			Mat ROI_mat = Mat(img);
 			Mat faceImg = ROI_mat(*r).clone();
 
-      portno = 9001;
-      sockfd = socket(AF_INET, SOCK_STREAM, 0);
-      if (sockfd < 0)
-          printf("ERROR opening socket\n");
+			sprintf(bufferImage,"rows=%d , cols=%d , image.total()=%d \n",faceImg.rows,faceImg.cols,faceImg.total());
+	      faceImg = (faceImg.reshape(0,1));
+	      
+	      portno = 9001;
+	      sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	      if (sockfd < 0)
+				printf("ERROR opening socket\n");
 
-      //bzero((char *) &serv_addr, sizeof(serv_addr));
-      memset(&serv_addr, 0, sizeof(serv_addr));
-      serv_addr.sin_family = AF_INET;
-      serv_addr.sin_addr.s_addr = inet_addr("192.168.1.40");
-      serv_addr.sin_port = htons(portno);
-      if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
-          perror("ERROR connecting1\n");
-      memset(buffer, 0, 1024);
-
-			sprintf(buffer,"rows=%d , cols=%d , image.total()=%d \n",faceImg.rows,faceImg.cols,faceImg.total());
-			faceImg = (faceImg.reshape(0,1));
+	      //bzero((char *) &serv_addr, sizeof(serv_addr));
+	      memset(&serv_addr, 0, sizeof(serv_addr));
+	      serv_addr.sin_family = AF_INET;
+	      serv_addr.sin_addr.s_addr = inet_addr("192.168.1.40");
+	      serv_addr.sin_port = htons(portno);
+	      if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
+		  		perror("ERROR connecting1\n");
+		  		
+		  		
+	      printf("socket fd=%d\n",sockfd);
+	
+			bzero(buffer,32);
+			n = recv(sockfd,buffer,8,0);//server welcome
+			printf("recv n =%d\n",n);
+			if(0 == strcmp(serverWelcome,buffer))
+			{
+				printf("recv server hello\n");
+				printf(buffer);
+				bzero(buffer,32);
+			}else{
+				close(sockfd);
+				break;
+			}
+	
 			printf("rows =%d , cols = %d ,image.total() = %d \n",faceImg.rows,faceImg.cols,faceImg.total());
-			printf("sockfd = %d \n",sockfd);
-			n = send(sockfd,buffer,strlen(buffer),0);
-    	printf("send n =%d\n",n);
-  	  if (n < 0)
-  		 	perror("ERROR writing to socket");
-
-    	n = send(sockfd,faceImg.data,faceImg.total()*faceImg.elemSize(),0);
-			if (n < 0)
+		    //n = send(sockfd,image.data,image.total()*image.channels(),0);
+		    n = send(sockfd,bufferImage,strlen(bufferImage),0);
+		    	printf("send n =%d\n",n);
+		    if (n < 0) 
+			 perror("ERROR writing to socket");
+			 
+		    n = send(sockfd,faceImg.data,faceImg.total()*faceImg.elemSize(),0);
+		    printf("send n =%d\n",n);
+			if (n < 0) 
 				perror("ERROR writing to socket");
-			printf("send n =%d\n",n);
-
-      close(sockfd);
+			//char byeBuffer[5]	= "bye";
+			 n = recv(sockfd,buffer,4,0);
+			 if(0 == strcmp(serverBye,buffer))
+			 {
+			 	printf("recv server bye\n");
+				printf(buffer);
+			 }else{
+				close(sockfd);
+				break;
+			}
+		    close(sockfd);
 
 		}
 		printf("detect=++++++++++++++++++++++++++++++1\n");
