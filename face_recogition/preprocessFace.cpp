@@ -344,3 +344,121 @@ Mat getPreprocessedFace(Mat &srcImg, int desiredFaceWidth, CascadeClassifier &fa
     }
     return Mat();
 }
+
+Mat getPreprocessedFaceFromClient(Mat &srcImg, int desiredFaceWidth, CascadeClassifier &faceCascade, CascadeClassifier &eyeCascade1, CascadeClassifier &eyeCascade2, bool doLeftAndRightSeparately, Rect *storeFaceRect, Point *storeLeftEye, Point *storeRightEye, Rect *searchedLeftEye, Rect *searchedRightEye)
+{
+    // Use square faces.
+    int desiredFaceHeight = desiredFaceWidth;
+
+    Mat faceImg = srcImg;    // Get the detected face image.
+
+    // If the input image is not grayscale, then convert the BGR or BGRA color image to grayscale.
+    Mat gray;
+    if (faceImg.channels() == 3) {
+        cvtColor(faceImg, gray, CV_BGR2GRAY);
+    }
+    else if (faceImg.channels() == 4) {
+        cvtColor(faceImg, gray, CV_BGRA2GRAY);
+    }
+    else {
+        // Access the input image directly, since it is already grayscale.
+        gray = faceImg;
+    }
+
+    // Search for the 2 eyes at the full resolution, since eye detection needs max resolution possible!
+    Point leftEye, rightEye;
+
+    detectBothEyes(gray, eyeCascade1, eyeCascade2, leftEye, rightEye, searchedLeftEye, searchedRightEye);
+    //printf( "eye time = %gms\n", t/((double)cvGetTickFrequency()*1000.) );
+
+
+    // Give the eye results to the caller if desired.
+    if (storeLeftEye)
+        *storeLeftEye = leftEye;
+    if (storeRightEye)
+        *storeRightEye = rightEye;
+    std::cout << leftEye.x << rightEye.x << std::endl;
+    // Check if both eyes were detected.
+    if (leftEye.x >= 0 && rightEye.x >= 0) {
+
+        // Make the face image the same size as the training images.
+
+        // Since we found both eyes, lets rotate & scale & translate the face so that the 2 eyes
+        // line up perfectly with ideal eye positions. This makes sure that eyes will be horizontal,
+        // and not too far left or right of the face, etc.
+
+        // Get the center between the 2 eyes.
+        Point2f eyesCenter = Point2f( (leftEye.x + rightEye.x) * 0.5f, (leftEye.y + rightEye.y) * 0.5f );
+        // Get the angle between the 2 eyes.
+        double dy = (rightEye.y - leftEye.y);
+        double dx = (rightEye.x - leftEye.x);
+        double len = sqrt(dx*dx + dy*dy);
+        double angle = atan2(dy, dx) * 180.0/CV_PI; // Convert from radians to degrees.
+
+        // Hand measurements shown that the left eye center should ideally be at roughly (0.19, 0.14) of a scaled face image.
+        const double DESIRED_RIGHT_EYE_X = (1.0f - DESIRED_LEFT_EYE_X);
+        // Get the amount we need to scale the image to be the desired fixed size we want.
+        double desiredLen = (DESIRED_RIGHT_EYE_X - DESIRED_LEFT_EYE_X) * desiredFaceWidth;
+        double scale = desiredLen / len;
+        // Get the transformation matrix for rotating and scaling the face to the desired angle & size.
+        Mat rot_mat = getRotationMatrix2D(eyesCenter, angle, scale);
+        // Shift the center of the eyes to be the desired center between the eyes.
+        rot_mat.at<double>(0, 2) += desiredFaceWidth * 0.5f - eyesCenter.x;
+        rot_mat.at<double>(1, 2) += desiredFaceHeight * DESIRED_LEFT_EYE_Y - eyesCenter.y;
+
+        // Rotate and scale and translate the image to the desired angle & size & position!
+        // Note that we use 'w' for the height instead of 'h', because the input face has 1:1 aspect ratio.
+        Mat warped = Mat(desiredFaceHeight, desiredFaceWidth, CV_8U, Scalar(128)); // Clear the output image to a default grey.
+        warpAffine(gray, warped, rot_mat, warped.size());
+        //imshow("warped", warped);
+
+        // Give the image a standard brightness and contrast, in case it was too dark or had low contrast.
+        if (!doLeftAndRightSeparately) {
+            // Do it on the whole face.
+            equalizeHist(warped, warped);
+        }
+        else {
+            // Do it seperately for the left and right sides of the face.
+            equalizeLeftAndRightHalves(warped);
+        }
+        //imshow("equalized", warped);
+
+        // Use the "Bilateral Filter" to reduce pixel noise by smoothing the image, but keeping the sharp edges in the face.
+        Mat filtered = Mat(warped.size(), CV_8U);
+        bilateralFilter(warped, filtered, 0, 20.0, 2.0);
+        //imshow("filtered", filtered);
+
+        // Filter out the corners of the face, since we mainly just care about the middle parts.
+        // Draw a filled ellipse in the middle of the face-sized image.
+        Mat mask = Mat(warped.size(), CV_8U, Scalar(0)); // Start with an empty mask.
+        Point faceCenter = Point( desiredFaceWidth/2, cvRound(desiredFaceHeight * FACE_ELLIPSE_CY) );
+        Size size = Size( cvRound(desiredFaceWidth * FACE_ELLIPSE_W), cvRound(desiredFaceHeight * FACE_ELLIPSE_H) );
+        ellipse(mask, faceCenter, size, 0, 0, 360, Scalar(255), CV_FILLED);
+        //imshow("mask", mask);
+
+        // Use the mask, to remove outside pixels.
+        Mat dstImg = Mat(warped.size(), CV_8U, Scalar(128)); // Clear the output image to a default gray.
+        /*
+        namedWindow("filtered");
+        imshow("filtered", filtered);
+        namedWindow("dstImg");
+        imshow("dstImg", dstImg);
+        namedWindow("mask");
+        imshow("mask", mask);
+        */
+        // Apply the elliptical mask on the face.
+        filtered.copyTo(dstImg, mask);  // Copies non-masked pixels from filtered to dstImg.
+        //imshow("dstImg", dstImg);
+
+        return dstImg;
+    }
+    /*
+    else {
+        // Since no eyes were found, just do a generic image resize.
+        resize(gray, tmpImg, Size(w,h));
+    }
+    */
+    std::cout << "do not detecte eyes " << std::endl;
+
+    return Mat();
+}

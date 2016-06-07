@@ -73,7 +73,7 @@ const bool preprocessLeftAndRightSeparately = true;   // Preprocess left & right
 // Set to true if you want to see many windows created, showing various debug info. Set to 0 otherwise.
 bool m_debug = false;
 
-
+#include <signal.h>
 #include <stdio.h>
 #include <vector>
 #include <string>
@@ -98,9 +98,10 @@ using namespace std;
 
 #if !defined VK_ESCAPE
     #define VK_ESCAPE 0x1B      // Escape character (27)
+    #define VK_TAB 0x9
 #endif
 
-
+int server_stop = 0;
 // Running mode for the Webcam-based interactive GUI program.
 enum MODES {MODE_STARTUP=0, MODE_DETECTION, MODE_COLLECT_FACES, MODE_TRAINING, MODE_RECOGNITION, MODE_DELETE_ALL,   MODE_END};
 const char* MODE_NAMES[] = {"Startup", "Detection", "Collect Faces", "Training", "Recognition", "Delete All", "ERROR!"};
@@ -332,7 +333,7 @@ void recognizeAndTrainUsingWebcam(VideoCapture &videoCapture, CascadeClassifier 
     // Since we have already initialized everything, lets start in Detection mode.
     m_mode = MODE_DETECTION;
 //dlx mod here First,a demo receive mat from zedboard use socket
-
+/*
       int sockfd, newsockfd, portno;
      socklen_t clilen;
      char buffer[1024];
@@ -413,7 +414,7 @@ void recognizeAndTrainUsingWebcam(VideoCapture &videoCapture, CascadeClassifier 
 
      //waitKey(0);
 
-
+*/
 //
 
     // Run forever, until the user hits Escape to "break" out of this loop.
@@ -715,14 +716,173 @@ void recognizeAndTrainUsingWebcam(VideoCapture &videoCapture, CascadeClassifier 
         if (keypress == VK_ESCAPE) {   // Escape Key
             // Quit the program!
             break;
+        }else if(keypress == VK_TAB){
+            //begin the server
+            if (model.empty())
+            {
+                model = loadModel();
+                //vector<int> getLabelsByString("labels");
+                faceLabels = model->getLabelsByString("labels");
+            }
+
+
+            int sockfd, newsockfd, portno;
+           socklen_t clilen;
+           char buffer[1024]="welcome";
+           char serverWelcome[10] = "welcome";
+           char serverBye[5] = "bye";
+           struct sockaddr_in serv_addr, cli_addr;
+           int n;
+
+           //printf("sizeof int %d\n",sizeof(int));
+           sockfd = socket(AF_INET, SOCK_STREAM, 0);
+           if (sockfd < 0)
+              perror("ERROR opening socket");
+           bzero((char *) &serv_addr, sizeof(serv_addr));
+           portno = 9001;
+           serv_addr.sin_family = AF_INET;
+           serv_addr.sin_addr.s_addr = INADDR_ANY;
+           serv_addr.sin_port = htons(portno);
+           if (bind(sockfd, (struct sockaddr *) &serv_addr,
+                    sizeof(serv_addr)) < 0)
+                    perror("ERROR on binding");
+
+           namedWindow( "Server", CV_WINDOW_AUTOSIZE );// Create a window for display.
+           while(server_stop != 1)
+           {
+             printf("listen=====\n");
+             listen(sockfd,5);
+             //printf("listen=----\n");
+             clilen = sizeof(cli_addr);
+             //printf("accepting=====\n");
+             newsockfd = accept(sockfd,
+                         (struct sockaddr *) &cli_addr,
+                         &clilen);
+             printf("accepting-----\n");
+             if (newsockfd < 0)
+                perror("ERROR on accept");
+
+             n = send(newsockfd,serverWelcome,strlen(serverWelcome),0);
+             printf("sebd n =%d\n",n);
+
+             bzero(buffer,1024);
+
+
+             int rows = 0,cols = 0,total = 0;
+             n = recv(newsockfd,buffer,43,0);
+             if (n < 0) printf("ERROR reading from socket\n");
+             //client printf("rows=%d , cols=%d , image.total()=%d \n",image.rows,image.cols,image.total());
+             sscanf(buffer,"rows=%d , cols=%d , image.total()=%d \n",&rows,&cols,&total);
+             printf(buffer);
+             printf("get it,rows=%d , cols=%d , image.total()=%d \n",rows,cols,total);
+             printf("\n");
+
+             Mat  img = Mat::zeros( rows,cols, CV_8UC3);
+             int  imgSize = img.total()*img.elemSize();
+             uchar sockData[imgSize];
+
+             for (int i = 0; i < imgSize; i += n) {
+                 if ((n = recv(newsockfd, sockData +i, imgSize  - i, 0)) == -1) {
+                   perror("recv failed");
+                 }
+                 printf("rcv n =%d\n",n);
+                 if(n == 0)
+                 {
+                    waitKey(0);
+                 }
+             }
+             n = send(newsockfd,serverBye,strlen(serverBye),0);
+             printf("sebd n =%d\n",n);
+             close(newsockfd);
+
+              int ptr=0;
+              for (int i = 0;  i < img.rows; i++) {
+                  for (int j = 0; j < img.cols; j++) {
+                      img.at<cv::Vec3b>(i,j) = cv::Vec3b(sockData[ptr+ 0],sockData[ptr+1],sockData[ptr+2]);
+                      ptr=ptr+3;
+                  }
+              }
+
+              printf("receive test ----rows =%d , cols = %d ,image.total() = %d \n",img.rows,img.cols,img.total());
+              imshow("Server", img);
+              //recognize the face
+
+              Rect faceRect;  // Position of detected face.
+              Rect searchedLeftEye, searchedRightEye; // top-left and top-right regions of the face, where eyes were searched.
+              Point leftEye, rightEye;    // Position of the detected eyes.
+
+              Mat preprocessedFace = getPreprocessedFaceFromClient(img, faceWidth, faceCascade, eyeCascade1, eyeCascade2, preprocessLeftAndRightSeparately, &faceRect, &leftEye, &rightEye, &searchedLeftEye, &searchedRightEye);
+
+              //printMatInfo(preprocessedFace,"preprocessedFace---");
+              bool gotFaceAndEyes = false;
+              if (preprocessedFace.data)
+                  gotFaceAndEyes = true;
+              //std::cout << "preprocessedFaces.size()" << preprocessedFaces.size() << std::endl;
+              //std::cout << "faceLabels.size()"<< faceLabels.size() << std::endl;
+              std::cout << "gotFaceAndEyes" <<  gotFaceAndEyes << std::endl;
+              //----recognize
+              //if (gotFaceAndEyes && (preprocessedFaces.size() > 0) && (preprocessedFaces.size() == faceLabels.size())) {
+              if(gotFaceAndEyes){
+                  // Generate a face approximation by back-projecting the eigenvectors & eigenvalues.
+                  Mat reconstructedFace;
+
+                  reconstructedFace = reconstructFace(model, preprocessedFace);
+                  if (1)
+                      if (reconstructedFace.data){
+                          imshow("reconstructedFace", reconstructedFace);
+                          imshow("Server",preprocessedFace);
+                          //waitKey(0);
+                      }
+                  // Verify whether the reconstructed face looks like the preprocessed face, otherwise it is probably an unknown person.
+                  double similarity = getSimilarity(preprocessedFace, reconstructedFace);
+                   cout << ". Similarity: " << similarity << endl;
+                  string outputStr;
+                  if (similarity < UNKNOWN_PERSON_THRESHOLD) {
+                      // Identify who the person is in the preprocessed face image.
+                      std::cout << "test1" << std::endl;
+                      identity = model->predict(preprocessedFace);
+                      std::cout << "test2" << std::endl;
+                      outputStr = toString(identity);
+                      std::cout << "test3" << std::endl;
+                  }
+                  else {
+                      // Since the confidence is low, assume it is an unknown person.
+                      outputStr = "Unknown";
+                  }
+
+                  //printf( "recong time = %gms\n", t/((double)cvGetTickFrequency()*1000.) );
+
+                  cout << "Identity: " << outputStr << ". Similarity: " << similarity << endl;
+
+              }
+
+
+              //waitKey(0);
+              //waitKey(0);
+          }
+           //Mat image(690,690,CV_8UC3,*buffer);
+           //imwrite("/home/securitas/images/prova.jpg",image);
+
+           close(sockfd);
+
+           //imshow( "Server", img );
+           //waitKey(0);
+           //return;
         }
+
 
     }//end while
 }
 
+void handle_sigtstp(int s) {//处理ctrz的
+    printf("DLX-------REVEIVED ctrz\n");
+    server_stop = 1;
+}
 
 int main(int argc, char *argv[])
 {
+    signal(SIGTSTP,handle_sigtstp);
+
     CascadeClassifier faceCascade;
     CascadeClassifier eyeCascade1;
     CascadeClassifier eyeCascade2;

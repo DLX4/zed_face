@@ -50,10 +50,38 @@ Ptr<FaceRecognizer> learnCollectedFaces(const vector<Mat> preprocessedFaces, con
 
     // Do the actual training from the collected faces. Might take several seconds or minutes depending on input!
     model->train(preprocessedFaces, faceLabels);
+    model->save("trainedModel.yml");
 
     return model;
 }
+Ptr<FaceRecognizer> loadModel()
+{
+    Ptr<FaceRecognizer> model;
 
+    bool haveContribModule = initModule_contrib();
+    if (!haveContribModule) {
+        cerr << "ERROR: The 'contrib' module is needed for FaceRecognizer but has not been loaded into OpenCV!" << endl;
+        exit(1);
+    }
+
+    model = Algorithm::create<FaceRecognizer>("FaceRecognizer.Fisherfaces");
+    Mat labels;
+    if (model.empty()) {
+        cerr << "ERROR: The FaceRecognizer algorithm is not available in your version of OpenCV. Please update to OpenCV v2.4.1 or newer." << endl;
+        exit(1);
+    }
+    try{
+      model->load("trainedModel.yml");
+      labels = model->get<Mat>("labels");
+    }catch (cv::Exception &e){}
+
+    if (labels.rows <= 0){
+       cerr << "ERROR: could not load trained data from trainedModel.yml" << endl;
+       exit(1);
+    }
+
+    return model;
+}
 // Convert the matrix row or column (float matrix) to a rectangular 8-bit image that can be displayed or saved.
 // Scales the values to be between 0 to 255.
 Mat getImageFrom1DFloatMat(const Mat matrixRow, int height)

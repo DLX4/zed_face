@@ -96,7 +96,7 @@ void detectLargestObject(const Mat &img, CascadeClassifier &cascade, Rect &large
     // How much the detections should be filtered out. This should depend on how bad false detections are to your system.
     // minNeighbors=2 means lots of good+bad detections, and minNeighbors=6 means only good detections are given but some are missed.
     int minNeighbors = 4;
-    printf("scaledWidth = %d\n",scaledWidth);
+    //printf("scaledWidth = %d\n",scaledWidth);
     // Perform Object or Face Detection, looking for just 1 object (the biggest in the image).
     vector<Rect> objects;
     detectObjectsCustom(img, cascade, objects, scaledWidth, flags, minFeatureSize, searchScaleFactor, minNeighbors);
